@@ -5,6 +5,6 @@ The GUI listens for inputs but allows you to adjust the parameters of the notes 
 Todo:<br>
 Atack and decay, sustain my releases. figure the whole octive thing out.<br>
 add UPC codes that play predefined tunes.<br>
-<img src="a.png">
+<img src="b.png">
 
 Thank you EPIC RAP BATTLES OF HISTORY, I learned something about music.
