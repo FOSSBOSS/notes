@@ -1,109 +1,58 @@
 #!/usr/bin/env python3
-import simpleaudio as sa
-import numpy as np
-import tkinter as tk
-from tkinter import ttk
-# sudo apt-get install -y python3-dev libasound2-dev
-# https://simpleaudio.readthedocs.io/en/latest/installation.html#linux-dependencies
-notes = {
-    "C": 261.63, "C#": 277.18, "D": 293.66, "D#": 311.13,
-    "E": 329.63, "F": 349.23, "F#": 369.99, "G": 392.00,
-    "G#": 415.30, "A": 440.00, "A#": 466.16, "B": 493.88
+import barcode
+from barcode.writer import ImageWriter
+import os
+
+# Directory to save output
+output_dir = "barcodes"
+os.makedirs(output_dir, exist_ok=True)
+
+# Define the musical riff (ordered)
+riff = [
+    "C", "C#", "D",
+    "D#", "E", "F",
+    "F", "G", "G#",
+    "A", "A#", "B"
+]
+
+# Define barcode settings
+writer_options = {
+    'module_width': 0.18,
+    'module_height': 1.5,
+    'font_size': 3,
+    'text_distance': 1.0,
+    'quiet_zone': 1.0,
+    'write_text': False
 }
 
-buffer = ""
+# Use Code128 barcode
+code128 = barcode.get_barcode_class('code128')
 
-def play_note(freq):
+# Track image filenames in order
+image_files = []
 
-    duration = duration_slider.get()
-    fs = 44100
-    t = np.linspace(0, duration, int(fs * duration), False)
-    pitch = pitch_slider.get()
-    vol = vol_slider.get() / 100.0
-    ch = int(ch_slider.get())
-    bps = int(bp_slider.get())
+for i, note in enumerate(riff):
+    safe_note = note.replace("#", "s").replace("b", "b")  # avoid filename issues
+    filename = f"{output_dir}/{i:02d}_{safe_note}"
+    code = code128(note, writer=ImageWriter())
+    filepath = code.save(filename, options=writer_options)
+    image_files.append(os.path.basename(filepath))
 
-    freq *= pitch
-    decay_rate = decay_slider.get()
-    envelope = np.exp(-decay_rate * t)
-    wave = 0.5 * np.sin(2 * np.pi * freq * t) * envelope
-    #wave = 0.5 * np.sin(2 * np.pi * freq * t)
-    wave = wave * (vol * 32767)
-    audio = wave.astype(np.int16)
+    print(f"Saved barcode: {filepath}")
 
-    if ch == 2:
-        audio = np.column_stack((audio, audio)).flatten()
+# Generate LaTeX document
+latex_path = os.path.join(output_dir, "riff_barcodes.tex")
 
-    sa.play_buffer(audio, ch, bps, fs).wait_done()
+with open(latex_path, "w") as f:
+    f.write(r"""
+\documentclass[9pt]{article}
+\usepackage{graphicx}
+\usepackage[margin=0.5in]{geometry}
+\pagestyle{empty}
+\begin{document}
+""")
 
-def on_key(event):
-    global buffer
-    char = event.char.upper()
+    for img in image_files:
+        f.write(f"\\includegraphics[width=0.65\\linewidth]{{{img}}}\\\\[0.5em]\n")
 
-    if event.keysym == "Return":
-        note = buffer.strip()
-        if note in notes:
-            play_note(notes[note])
-            status.set(f"Played: {note}")
-        else:
-            status.set(f"Unknown: {note}")
-        buffer = ""  # Clear for next scan
-    elif char.isalnum() or char in "#":
-        buffer += char
-
-# === GUI ===
-root = tk.Tk()
-root.title("Note Player (Barcode Ready)")
-
-main = ttk.Frame(root, padding=10)
-main.grid()
-
-# Volume
-ttk.Label(main, text="Volume (%)").grid(column=0, row=0, sticky="w")
-vol_slider = ttk.Scale(main, from_=0, to=100, orient="horizontal")
-vol_slider.set(50)
-vol_slider.grid(column=1, row=0, columnspan=2, sticky="ew")
-
-# Channels
-ttk.Label(main, text="Channels (1=Mono, 2=Stereo)").grid(column=0, row=1, sticky="w")
-ch_slider = tk.Scale(main, from_=1, to=2, resolution=1, orient="horizontal")
-ch_slider.set(1)
-ch_slider.grid(column=1, row=1, columnspan=2, sticky="ew")
-
-# Bits per sample
-ttk.Label(main, text="Bits per Sample (1–4)").grid(column=0, row=2, sticky="w")
-bp_slider = tk.Scale(main, from_=1, to=4, resolution=1, orient="horizontal")
-bp_slider.set(2)
-bp_slider.grid(column=1, row=2, columnspan=2, sticky="ew")
-
-# Pitch bend
-ttk.Label(main, text="Pitch Bend (0.5–2.0)").grid(column=0, row=3, sticky="w")
-pitch_slider = tk.Scale(main, from_=0.5, to=2.0, resolution=0.01, digits=4,
-                        orient="horizontal", length=200)
-pitch_slider.set(1.0)
-pitch_slider.grid(column=1, row=3, columnspan=2, sticky="ew")
-
-# Status
-status = tk.StringVar()
-ttk.Label(main, textvariable=status, foreground="blue").grid(column=0, row=4, columnspan=3, sticky="w")
-
-# Duration
-ttk.Label(main, text="Duration (0.1–2.5)").grid(column=0, row=5, sticky="w")
-duration_slider = tk.Scale(main, from_=0.1, to=2.5, resolution=0.01, digits=4,
-                        orient="horizontal", length=200)
-duration_slider.set(0.3)
-duration_slider.grid(column=1, row=5, columnspan=2, sticky="ew")
-
-# Decay 
-ttk.Label(main, text="Decay Rate (1–20)").grid(column=0, row=6, sticky="w")
-decay_slider = tk.Scale(main, from_=1, to=20, resolution=0.1, orient="horizontal", length=200)
-decay_slider.set(5)
-decay_slider.grid(column=1, row=6, columnspan=2, sticky="ew")
-
-
-main.columnconfigure(1, weight=1)
-
-# Bind keys globally
-root.bind_all("<Key>", on_key)
-
-root.mainloop()
+    f.write(r"\end{document}")
